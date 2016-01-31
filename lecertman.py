@@ -8,6 +8,7 @@ from cryptography.hazmat import backends
 from cryptography.x509 import oid
 from cryptography import x509
 
+from datetime import datetime
 import json, os, base64, binascii, time, hashlib, re, copy, textwrap, sys
 
 try:
@@ -61,6 +62,20 @@ def get_account_key(key_file):
 
 def get_certificate(ca, priv_key, cert_metadata, cert_name, domains):
 
+    # Return if target certificate exists and is still valid
+
+    cert_file = cert_name + '.crt'
+    if os.path.exists(cert_file):
+
+        with open(cert_file) as f:
+            cert_pem = f.read()
+
+        backend = backends.default_backend()
+        cert = x509.load_pem_x509_certificate(cert_pem, backend)
+        if datetime.now () < cert.not_valid_after:
+            print('certificate for %s still valid, skipping' % cert_name)
+            return
+
     # Create JWS header
 
     pub_key = priv_key.public_key()
@@ -79,7 +94,6 @@ def get_certificate(ca, priv_key, cert_metadata, cert_name, domains):
 
     # Create certificate key
 
-    backend = backends.default_backend()
     print('Creating certificate key... ', end='')
     cert_key = rsa.generate_private_key(65537, 4096, backend)
     with open(cert_name + '.key', 'wb') as f:
@@ -189,7 +203,7 @@ def get_certificate(ca, priv_key, cert_metadata, cert_name, domains):
     # Write certificate to disk
 
     pem_cert = base64.b64encode(result).decode('utf-8')
-    with open(cert_name + '.crt', 'w') as f:
+    with open(cert_file, 'w') as f:
         f.write('-----BEGIN CERTIFICATE-----\n')
         f.write('\n'.join(textwrap.wrap(pem_cert, 64)))
         f.write('\n-----END CERTIFICATE-----\n')
