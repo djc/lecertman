@@ -12,11 +12,11 @@ import json, os, base64, binascii, time, hashlib, re, copy, textwrap, sys
 
 try:
     from urllib.request import urlopen # Python 3
+    from configparser import ConfigParser
 except ImportError:
     from urllib2 import urlopen # Python 2
+    from ConfigParser import ConfigParser
 
-#CA = 'https://acme-staging.api.letsencrypt.org'
-CA = "https://acme-v01.api.letsencrypt.org"
 AGREEMENT = 'https://letsencrypt.org/documents/LE-SA-v1.0.1-July-27-2015.pdf'
 WELL_KNOWN_URL = 'http://%s/.well-known/acme-challenge/%s'
 
@@ -54,13 +54,12 @@ def register(ca, priv_key, header):
         'resource': 'new-reg', 'agreement': AGREEMENT,
     })
 
-def get_certificate(account_key, domains):
-
-    # Read private key from file
-
+def get_account_key(key_file):
     backend = backends.default_backend()
-    with open(account_key, 'rb') as f:
-        priv_key = serialization.load_pem_private_key(f.read(), None, backend)
+    with open(key_file, 'rb') as f:
+        return serialization.load_pem_private_key(f.read(), None, backend)
+
+def get_certificate(ca, priv_key, cert_metadata, cert_name, domains):
 
     # Create JWS header
 
@@ -80,9 +79,10 @@ def get_certificate(account_key, domains):
 
     # Create certificate key
 
+    backend = backends.default_backend()
     print('Creating certificate key... ', end='')
     cert_key = rsa.generate_private_key(65537, 4096, backend)
-    with open(domains[0][0] + '.key', 'wb') as f:
+    with open(cert_name + '.key', 'wb') as f:
         f.write(cert_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.TraditionalOpenSSL,
@@ -93,10 +93,10 @@ def get_certificate(account_key, domains):
     # Create CSR
 
     attrs = [
-        (oid.NameOID.COUNTRY_NAME, u'NL'),
-        (oid.NameOID.STATE_OR_PROVINCE_NAME, u'NH'),
-        (oid.NameOID.LOCALITY_NAME, u'Amsterdam'),
-        (oid.NameOID.ORGANIZATION_NAME, u'XavaMedia Web Services'),
+        (oid.NameOID.COUNTRY_NAME, cert_metadata['country']),
+        (oid.NameOID.STATE_OR_PROVINCE_NAME, cert_metadata['region']),
+        (oid.NameOID.LOCALITY_NAME, cert_metadata['locality']),
+        (oid.NameOID.ORGANIZATION_NAME, cert_metadata['organization']),
     ]
     attrs.append((oid.NameOID.COMMON_NAME, domains[0][0]))
     attrs = x509.Name([x509.NameAttribute(i[0], i[1]) for i in attrs])
@@ -114,8 +114,8 @@ def get_certificate(account_key, domains):
     for domain, challenge_dir in domains:
 
         print('Verifying %s domain... ' % domain, end='')
-        url = CA + '/acme/new-authz'
-        code, result = send_signed_request(CA, url, priv_key, header, {
+        url = ca + '/acme/new-authz'
+        code, result = send_signed_request(ca, url, priv_key, header, {
             'resource': 'new-authz',
             'identifier': {'type': 'dns', 'value': domain},
         })
@@ -148,7 +148,7 @@ def get_certificate(account_key, domains):
         # Send challenge response
 
         payload = {'resource': 'challenge', 'keyAuthorization': key_authz}
-        bits = CA, challenge['uri'], priv_key, header, payload
+        bits = ca, challenge['uri'], priv_key, header, payload
         code, result = send_signed_request(*bits)
         if code != 202:
             msg = 'Error triggering challenge: %s %s'
@@ -180,7 +180,7 @@ def get_certificate(account_key, domains):
     print('Retrieving certificate... ', end='')
     csr_der = csr.public_bytes(serialization.Encoding.DER)
     cert_req = {'resource': 'new-cert', 'csr': b64(csr_der)}
-    bits = CA, CA + '/acme/new-cert', priv_key, header, cert_req
+    bits = ca, ca + '/acme/new-cert', priv_key, header, cert_req
     code, result = send_signed_request(*bits)
     if code != 201:
         raise ValueError('Error signing certificate: %s %s' % (code, result))
@@ -189,11 +189,29 @@ def get_certificate(account_key, domains):
     # Write certificate to disk
 
     pem_cert = base64.b64encode(result).decode('utf-8')
-    with open(domains[0][0] + '.crt', 'w') as f:
+    with open(cert_name + '.crt', 'w') as f:
         f.write('-----BEGIN CERTIFICATE-----\n')
         f.write('\n'.join(textwrap.wrap(pem_cert, 64)))
         f.write('\n-----END CERTIFICATE-----\n')
 
+EXCLUDE_SECTIONS = set(['global', 'certificate-metadata'])
+
+def main(fn):
+
+    config = ConfigParser()
+    config.read(fn)
+    ca = config.get('global', 'ca')
+    account_key = get_account_key(config.get('global', 'account_key'))
+
+    decode = lambda s: s.decode('utf-8') if hasattr(s, 'decode') else s
+    cert_metadata = {}
+    for k, v in config.items('certificate-metadata'):
+        cert_metadata[decode(k)] = decode(v)
+
+    for cert_name in set(config.sections()) - EXCLUDE_SECTIONS:
+        items = config.items(cert_name)
+        domains = [(decode(k), decode(v)) for (k, v) in items]
+        get_certificate(ca, account_key, cert_metadata, cert_name, domains)
+
 if __name__ == "__main__":
-    key_file, domain, challenge_dir = sys.argv[1], sys.argv[2], sys.argv[3]
-    get_certificate(key_file, [(domain.decode('utf-8'), challenge_dir)])
+    main(sys.argv[1])
