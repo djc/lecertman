@@ -8,7 +8,7 @@ from cryptography.hazmat import backends
 from cryptography.x509 import oid
 from cryptography import x509
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import json, os, base64, binascii, time, hashlib, re, copy, textwrap, sys
 
 try:
@@ -204,6 +204,11 @@ def main(fn):
     ca = config.get('global', 'ca')
     account_key = get_account_key(config.get('global', 'account_key'))
 
+    warn_days, now = 0, datetime.now()
+    if 'warn_days' in config.options('global'):
+        warn_days = int(config.get('global', 'warn_days'))
+
+    warn_dt = now + timedelta(warn_days)
     decode = lambda s: s.decode('utf-8') if hasattr(s, 'decode') else s
     cert_metadata = {}
     for k, v in config.items('certificate-metadata'):
@@ -219,8 +224,15 @@ def main(fn):
 
             backend = backends.default_backend()
             cert = x509.load_pem_x509_certificate(cert_pem, backend)
-            if datetime.now () < cert.not_valid_after:
-                print('certificate for %s still valid, skipping' % cert_name)
+            expires = cert.not_valid_after
+            if warn_dt > expires > now:
+                msg = 'certificate for %s expiring %s, renewing soon'
+                print(msg % (cert_name, expires))
+                continue
+
+            if datetime.now() < expires:
+                bits = cert_name, expires
+                print('certificate for %s valid until %s, skipping' % bits)
                 continue
 
         items = config.items(cert_name)
