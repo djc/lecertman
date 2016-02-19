@@ -208,7 +208,12 @@ def main(fn):
     if 'warn_days' in config.options('global'):
         warn_days = int(config.get('global', 'warn_days'))
 
+    renew_days = 0
+    if 'renew_days' in config.options('global'):
+        renew_days = int(config.get('global', 'renew_days'))
+
     warn_dt = now + timedelta(warn_days)
+    renew_dt = now + timedelta(renew_days)
     decode = lambda s: s.decode('utf-8') if hasattr(s, 'decode') else s
     cert_metadata = {}
     for k, v in config.items('certificate-metadata'):
@@ -230,7 +235,7 @@ def main(fn):
                 print(msg % (cert_name, expires))
                 continue
 
-            if datetime.now() < expires:
+            if renew_dt < expires:
                 bits = cert_name, expires
                 print('certificate for %s valid until %s, skipping' % bits)
                 continue
