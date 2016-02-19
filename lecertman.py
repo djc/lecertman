@@ -62,22 +62,9 @@ def get_account_key(key_file):
 
 def get_certificate(ca, priv_key, cert_metadata, cert_name, domains):
 
-    # Return if target certificate exists and is still valid
-
-    cert_file = cert_name + '.crt'
-    if os.path.exists(cert_file):
-
-        with open(cert_file) as f:
-            cert_pem = f.read()
-
-        backend = backends.default_backend()
-        cert = x509.load_pem_x509_certificate(cert_pem, backend)
-        if datetime.now () < cert.not_valid_after:
-            print('certificate for %s still valid, skipping' % cert_name)
-            return
-
     # Create JWS header
 
+    backend = backends.default_backend()
     pub_key = priv_key.public_key()
     key_n = int_to_bytes(pub_key.public_numbers().n)
     key_e = int_to_bytes(pub_key.public_numbers().e)
@@ -203,7 +190,7 @@ def get_certificate(ca, priv_key, cert_metadata, cert_name, domains):
     # Write certificate to disk
 
     pem_cert = base64.b64encode(result).decode('utf-8')
-    with open(cert_file, 'w') as f:
+    with open(cert_name + '.crt', 'w') as f:
         f.write('-----BEGIN CERTIFICATE-----\n')
         f.write('\n'.join(textwrap.wrap(pem_cert, 64)))
         f.write('\n-----END CERTIFICATE-----\n')
@@ -223,6 +210,19 @@ def main(fn):
         cert_metadata[decode(k)] = decode(v)
 
     for cert_name in set(config.sections()) - EXCLUDE_SECTIONS:
+
+        cert_file = cert_name + '.crt'
+        if os.path.exists(cert_file):
+
+            with open(cert_file) as f:
+                cert_pem = f.read()
+
+            backend = backends.default_backend()
+            cert = x509.load_pem_x509_certificate(cert_pem, backend)
+            if datetime.now () < cert.not_valid_after:
+                print('certificate for %s still valid, skipping' % cert_name)
+                continue
+
         items = config.items(cert_name)
         domains = [(decode(k), decode(v)) for (k, v) in items]
         get_certificate(ca, account_key, cert_metadata, cert_name, domains)
