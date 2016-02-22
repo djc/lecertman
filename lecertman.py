@@ -10,6 +10,7 @@ from cryptography import x509
 
 from datetime import datetime, timedelta
 import json, os, base64, binascii, time, hashlib, re, copy, textwrap, sys
+import optparse
 
 try:
     from urllib.request import urlopen # Python 3
@@ -197,7 +198,7 @@ def get_certificate(ca, priv_key, cert_metadata, cert_name, domains):
 
 EXCLUDE_SECTIONS = set(['global', 'certificate-metadata'])
 
-def main(fn):
+def main(fn, opts):
 
     config = ConfigParser()
     config.read(fn)
@@ -236,8 +237,9 @@ def main(fn):
                 continue
 
             if renew_dt < expires:
-                bits = cert_name, expires
-                print('certificate for %s valid until %s, skipping' % bits)
+                if not opts.quiet:
+                    bits = cert_name, expires
+                    print('certificate for %s valid until %s, skipping' % bits)
                 continue
 
         items = config.items(cert_name)
@@ -245,4 +247,9 @@ def main(fn):
         get_certificate(ca, account_key, cert_metadata, cert_name, domains)
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    parser = optparse.OptionParser()
+    parser.add_option('-q', '--quiet', dest='quiet',
+                      action='store_true', default=False,
+                      help='show less output (good for cronjobs)')
+    opts, args = parser.parse_args()
+    main(args[0], opts)
