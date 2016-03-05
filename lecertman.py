@@ -76,11 +76,8 @@ def prepare_jws(priv_key):
     key_json = json.dumps(header['jwk'], sort_keys=True, separators=(',', ':'))
     return header, b64(hashlib.sha256(key_json.encode('utf8')).digest())
 
-def get_certificate(ca, priv_key, cert_metadata, cert_name, domains):
+def save_key_and_create_csr(cert_name, cert_metadata, domains):
 
-    # Create certificate key
-
-    print('Creating certificate key... ', end='')
     backend = backends.default_backend()
     cert_key = rsa.generate_private_key(65537, 4096, backend)
     with open(cert_name + '.key', 'wb') as f:
@@ -89,7 +86,6 @@ def get_certificate(ca, priv_key, cert_metadata, cert_name, domains):
             format=serialization.PrivateFormat.TraditionalOpenSSL,
             encryption_algorithm=serialization.NoEncryption(),
         ))
-    print('done')
 
     # Create CSR
 
@@ -108,9 +104,9 @@ def get_certificate(ca, priv_key, cert_metadata, cert_name, domains):
         ext = x509.SubjectAlternativeName(names)
         csr = builder.add_extension(ext, critical=False)
 
-    csr = csr.sign(cert_key, hashes.SHA256(), backend)
+    return csr.sign(cert_key, hashes.SHA256(), backend)
 
-    # Verify domains
+def get_certificate(ca, priv_key, cert_metadata, cert_name, domains):
 
     header, thumbprint = prepare_jws(priv_key)
     for domain, challenge_dir in domains:
@@ -178,6 +174,10 @@ def get_certificate(ca, priv_key, cert_metadata, cert_name, domains):
         print('done')
 
     # Get the new certificate
+
+    print('Creating certificate key and signing request... ', end='')
+    csr = save_key_and_create_csr(cert_name, cert_metadata, domains)
+    print('done')
 
     print('Retrieving certificate... ', end='')
     csr_der = csr.public_bytes(serialization.Encoding.DER)
