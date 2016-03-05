@@ -9,7 +9,7 @@ from cryptography.x509 import oid
 from cryptography import x509
 
 from datetime import datetime, timedelta
-import json, os, base64, binascii, time, hashlib, re, copy, textwrap, sys
+import json, os, base64, binascii, time, hashlib, re, copy, textwrap
 import optparse
 
 try:
@@ -63,8 +63,6 @@ def get_account_key(key_file):
 
 def prepare_jws(priv_key):
     pub_key = priv_key.public_key()
-    key_n = int_to_bytes(pub_key.public_numbers().n)
-    key_e = int_to_bytes(pub_key.public_numbers().e)
     header = {
         'alg': 'RS256',
         'jwk': {
