@@ -119,6 +119,15 @@ def save_key_and_create_csr(cert_name, cert_metadata, domains):
 
     return csr.sign(cert_key, hashes.SHA256(), backend)
 
+def retrieve_certificate(ca, priv_key, header, csr):
+    csr_der = csr.public_bytes(serialization.Encoding.DER)
+    cert_req = {'resource': 'new-cert', 'csr': b64(csr_der)}
+    bits = ca, ca + '/acme/new-cert', priv_key, header, cert_req
+    code, result = send_signed_request(*bits)
+    if code != 201:
+        raise ValueError('Error signing certificate: %s %s' % (code, result))
+    return result
+
 def get_certificate(ca, priv_key, cert_metadata, cert_name, domains):
 
     header, thumbprint = prepare_jws(priv_key)
@@ -185,17 +194,12 @@ def get_certificate(ca, priv_key, cert_metadata, cert_name, domains):
     print('done')
 
     print('Retrieving certificate... ', end='')
-    csr_der = csr.public_bytes(serialization.Encoding.DER)
-    cert_req = {'resource': 'new-cert', 'csr': b64(csr_der)}
-    bits = ca, ca + '/acme/new-cert', priv_key, header, cert_req
-    code, result = send_signed_request(*bits)
-    if code != 201:
-        raise ValueError('Error signing certificate: %s %s' % (code, result))
+    cert_bytes = retrieve_certificate(ca, priv_key, header, csr)
     print('done')
 
     # Write certificate to disk
 
-    pem_cert = base64.b64encode(result).decode('utf-8')
+    pem_cert = base64.b64encode(cert_bytes).decode('utf-8')
     with open(cert_name + '.crt', 'w') as f:
         f.write('-----BEGIN CERTIFICATE-----\n')
         f.write('\n'.join(textwrap.wrap(pem_cert, 64)))
