@@ -76,6 +76,19 @@ def prepare_jws(priv_key):
     key_json = json.dumps(header['jwk'], sort_keys=True, separators=(',', ':'))
     return header, b64(hashlib.sha256(key_json.encode('utf8')).digest())
 
+def request_authorization(ca, priv_key, header, domain):
+
+    url = ca + '/acme/new-authz'
+    code, result = send_signed_request(ca, url, priv_key, header, {
+        'resource': 'new-authz',
+        'identifier': {'type': 'dns', 'value': domain},
+    })
+
+    if code != 201:
+        msg = 'Error requesting challenges: {0} {1}'
+        raise ValueError(msg.format(code, result))
+    return json.loads(result.decode('utf-8'))
+
 def save_key_and_create_csr(cert_name, cert_metadata, domains):
 
     backend = backends.default_backend()
@@ -112,18 +125,10 @@ def get_certificate(ca, priv_key, cert_metadata, cert_name, domains):
     for domain, challenge_dir in domains:
 
         print('Verifying %s domain... ' % domain, end='')
-        url = ca + '/acme/new-authz'
-        code, result = send_signed_request(ca, url, priv_key, header, {
-            'resource': 'new-authz',
-            'identifier': {'type': 'dns', 'value': domain},
-        })
-        if code != 201:
-            msg = 'Error requesting challenges: {0} {1}'
-            raise ValueError(msg.format(code, result))
+        rsp = request_authorization(ca, priv_key, header, domain)
 
         # Write challenge response to file
 
-        rsp = json.loads(result.decode('utf-8'))
         challenge = [c for c in rsp['challenges'] if c['type'] == 'http-01'][0]
         token = re.sub(r'[^A-Za-z0-9_\-]', '_', challenge['token'])
         key_authz = '%s.%s' % (token, thumbprint)
