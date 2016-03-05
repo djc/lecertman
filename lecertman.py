@@ -115,7 +115,7 @@ def save_key_and_create_csr(cert_name, cert_metadata, domains):
     if len(domains) > 1:
         names = [x509.DNSName(d[0]) for d in domains[1:]]
         ext = x509.SubjectAlternativeName(names)
-        csr = builder.add_extension(ext, critical=False)
+        csr = csr.add_extension(ext, critical=False)
 
     return csr.sign(cert_key, hashes.SHA256(), backend)
 
