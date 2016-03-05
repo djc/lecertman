@@ -167,6 +167,7 @@ def get_certificate(ca, priv_key, cert_metadata, cert_name, domains):
             raise ValueError(msg % (code, result))
 
         # Wait for challenge response to be verified
+
         while True:
 
             try:
