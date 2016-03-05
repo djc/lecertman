@@ -61,11 +61,7 @@ def get_account_key(key_file):
     with open(key_file, 'rb') as f:
         return serialization.load_pem_private_key(f.read(), None, backend)
 
-def get_certificate(ca, priv_key, cert_metadata, cert_name, domains):
-
-    # Create JWS header
-
-    backend = backends.default_backend()
+def prepare_jws(priv_key):
     pub_key = priv_key.public_key()
     key_n = int_to_bytes(pub_key.public_numbers().n)
     key_e = int_to_bytes(pub_key.public_numbers().e)
@@ -78,11 +74,14 @@ def get_certificate(ca, priv_key, cert_metadata, cert_name, domains):
         },
     }
     key_json = json.dumps(header['jwk'], sort_keys=True, separators=(',', ':'))
-    thumbprint = b64(hashlib.sha256(key_json.encode('utf8')).digest())
+    return header, b64(hashlib.sha256(key_json.encode('utf8')).digest())
+
+def get_certificate(ca, priv_key, cert_metadata, cert_name, domains):
 
     # Create certificate key
 
     print('Creating certificate key... ', end='')
+    backend = backends.default_backend()
     cert_key = rsa.generate_private_key(65537, 4096, backend)
     with open(cert_name + '.key', 'wb') as f:
         f.write(cert_key.private_bytes(
@@ -113,6 +112,7 @@ def get_certificate(ca, priv_key, cert_metadata, cert_name, domains):
 
     # Verify domains
 
+    header, thumbprint = prepare_jws(priv_key)
     for domain, challenge_dir in domains:
 
         print('Verifying %s domain... ' % domain, end='')
