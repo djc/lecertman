@@ -239,15 +239,15 @@ def main(fn, opts):
             backend = backends.default_backend()
             cert = x509.load_pem_x509_certificate(cert_pem, backend)
             expires = cert.not_valid_after
-            if warn_dt > expires > now:
-                msg = 'certificate for %s expiring %s, renewing soon'
-                print(msg % (cert_name, expires))
-                continue
-
-            if renew_dt < expires:
+            if warn_dt < expires:
                 if not opts.quiet:
                     bits = cert_name, expires
                     print('certificate for %s valid until %s, skipping' % bits)
+                continue
+
+            if renew_dt < expires:
+                msg = 'certificate for %s expiring %s, renewing soon'
+                print(msg % (cert_name, expires))
                 continue
 
         items = config.items(cert_name)
