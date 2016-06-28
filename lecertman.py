@@ -90,7 +90,7 @@ def request_authorization(ca, priv_key, header, domain):
 def save_key_and_create_csr(cert_name, cert_metadata, domains):
 
     backend = backends.default_backend()
-    cert_key = rsa.generate_private_key(65537, 4096, backend)
+    cert_key = rsa.generate_private_key(65537, 2048, backend)
     with open(cert_name + '.key', 'wb') as f:
         f.write(cert_key.private_bytes(
             encoding=serialization.Encoding.PEM,
