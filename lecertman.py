@@ -228,7 +228,10 @@ def main(fn, opts):
     for k, v in config.items('certificate-metadata'):
         cert_metadata[decode(k)] = decode(v)
 
-    for cert_name in set(config.sections()) - EXCLUDE_SECTIONS:
+    for cert_name in config.sections():
+
+        if cert_name in EXCLUDE_SECTIONS:
+            continue
 
         cert_file = cert_name + '.crt'
         if os.path.exists(cert_file):
