@@ -236,7 +236,7 @@ def main(fn, opts):
         cert_file = cert_name + '.crt'
         if os.path.exists(cert_file):
 
-            with open(cert_file) as f:
+            with open(cert_file, 'rb') as f:
                 cert_pem = f.read()
 
             backend = backends.default_backend()
