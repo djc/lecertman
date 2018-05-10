@@ -149,7 +149,7 @@ def get_certificate(ca, priv_key, cert_metadata, cert_name, domains):
         try:
             rsp = urlopen(well_known_url)
             data = rsp.read().decode('utf8').strip()
-            assert data == key_authz
+            assert data == key_authz, (data, key_authz)
         except (IOError, AssertionError):
             os.remove(well_known_path)
             msg = "Wrote file to %s, but couldn't download %s"
